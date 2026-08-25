@@ -1,108 +1,318 @@
-name: Otomatik Proje İnşa Edici ve APK Derleyici
+#!/usr/bin/env bash
+#
+# opensource_prep.sh
+#
+# Bu script, bir Kotlin/Android projesini GitHub'da aÃ§Ä±k kaynak kodlu
+# paylaÅŸmaya hazÄ±r hale getirir:
+#   - Eksik LICENSE, .gitignore, README.md, CONTRIBUTING.md dosyalarÄ±nÄ± oluÅŸturur
+#   - .github/ altÄ±nda CI workflow, issue/PR ÅŸablonlarÄ± ekler
+#   - Hassas dosyalarÄ± (keystore, API key, google-services.json vb.) tarar ve uyarÄ±r
+#
+# KullanÄ±m:
+#   chmod +x opensource_prep.sh
+#   ./opensource_prep.sh /repo/kok/dizini "AdÄ±n SoyadÄ±n"
+#
+set -euo pipefail
+
+PROJECT_DIR="${1:-.}"
+AUTHOR_NAME="${2:-Your Name}"
+YEAR="$(date +%Y)"
+
+if [ ! -d "$PROJECT_DIR" ]; then
+  echo "âŒ Dizin bulunamadÄ±: $PROJECT_DIR"
+  exit 1
+fi
+
+cd "$PROJECT_DIR"
+echo "ğŸ“ Ã‡alÄ±ÅŸÄ±lan dizin: $(pwd)"
+echo ""
+
+# ---------------------------------------------------------------
+# 1) LICENSE (MIT)
+# ---------------------------------------------------------------
+if [ -f "LICENSE" ]; then
+  echo "âœ… LICENSE zaten mevcut, atlanÄ±yor."
+else
+  cat > LICENSE <<EOF
+MIT License
+
+Copyright (c) ${YEAR} ${AUTHOR_NAME}
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+EOF
+  echo "âœ… LICENSE (MIT) oluÅŸturuldu."
+fi
+
+# ---------------------------------------------------------------
+# 2) .gitignore (Android/Kotlin ÅŸablonu, mevcut olanla birleÅŸtirir)
+# ---------------------------------------------------------------
+GITIGNORE_CONTENT='
+# --- Android / Kotlin ---
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+*.keystore
+*.jks
+google-services.json
+/app/build
+/app/release
+
+# --- Secrets ---
+*.env
+secrets.properties
+'
+
+if [ -f ".gitignore" ]; then
+  # Zaten olmayan satÄ±rlarÄ± ekle
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    grep -qxF "$line" .gitignore 2>/dev/null || echo "$line" >> .gitignore
+  done <<< "$GITIGNORE_CONTENT"
+  echo "âœ… .gitignore gÃ¼ncellendi (eksik kurallar eklendi)."
+else
+  echo "$GITIGNORE_CONTENT" > .gitignore
+  echo "âœ… .gitignore oluÅŸturuldu."
+fi
+
+# ---------------------------------------------------------------
+# 3) README.md iskeleti (varsa dokunma)
+# ---------------------------------------------------------------
+if [ -f "README.md" ]; then
+  echo "âœ… README.md zaten mevcut, atlanÄ±yor."
+else
+  PROJECT_NAME="$(basename "$(pwd)")"
+  cat > README.md <<EOF
+# ${PROJECT_NAME}
+
+KÄ±sa proje aÃ§Ä±klamasÄ± buraya.
+
+## Ã–zellikler
+- Ã–zellik 1
+- Ã–zellik 2
+
+## Kurulum
+
+\`\`\`bash
+git clone https://github.com/kullanici-adi/${PROJECT_NAME}.git
+cd ${PROJECT_NAME}
+./gradlew assembleDebug
+\`\`\`
+
+## KatkÄ±da Bulunma
+KatkÄ± saÄŸlamak iÃ§in [CONTRIBUTING.md](CONTRIBUTING.md) dosyasÄ±na bakÄ±n.
+
+## Lisans
+Bu proje [MIT LisansÄ±](LICENSE) ile lisanslanmÄ±ÅŸtÄ±r.
+EOF
+  echo "âœ… README.md oluÅŸturuldu."
+fi
+
+# ---------------------------------------------------------------
+# 4) CONTRIBUTING.md
+# ---------------------------------------------------------------
+if [ -f "CONTRIBUTING.md" ]; then
+  echo "âœ… CONTRIBUTING.md zaten mevcut, atlanÄ±yor."
+else
+  cat > CONTRIBUTING.md <<'EOF'
+# KatkÄ±da Bulunma Rehberi
+
+1. Bu repoyu fork'layÄ±n.
+2. Yeni bir branch oluÅŸturun: `git checkout -b ozellik/yeni-ozellik`
+3. DeÄŸiÅŸikliklerinizi yapÄ±n ve commit edin: `git commit -m "AÃ§Ä±klama"`
+4. Branch'inizi push edin: `git push origin ozellik/yeni-ozellik`
+5. Pull Request aÃ§Ä±n.
+
+## Kod StandartlarÄ±
+- Kotlin resmi stil rehberine uyun.
+- Yeni Ã¶zellikler iÃ§in mÃ¼mkÃ¼nse test ekleyin.
+- Commit mesajlarÄ±nÄ± aÃ§Ä±klayÄ±cÄ± yazÄ±n.
+
+## Issue Bildirimi
+Hata bulduysanÄ±z veya Ã¶neriniz varsa lÃ¼tfen bir issue aÃ§Ä±n.
+EOF
+  echo "âœ… CONTRIBUTING.md oluÅŸturuldu."
+fi
+
+# ---------------------------------------------------------------
+# 5) .github/ yapÄ±sÄ± (CI, issue & PR ÅŸablonlarÄ±)
+# ---------------------------------------------------------------
+mkdir -p .github/workflows .github/ISSUE_TEMPLATE
+
+if [ ! -f ".github/workflows/android-build.yml" ]; then
+  cat > .github/workflows/android-build.yml <<'EOF'
+name: Android CI
 
 on:
   push:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  proje_olustur_ve_derle:
-    name: Proje Altyapısını Kur ve APK Üret
+  build:
     runs-on: ubuntu-latest
     steps:
-    - name: Kodları İndir
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Java 17 Ortamını Kur
-      uses: actions/setup-java@v5
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    - name: Android SDK ve Proje İskeletini Otomatik Oluştur
-      run: |
-        echo "=== SIFIRDAN ANDROID PROJESİ OLUŞTURULUYOR ==="
-        
-        # 1. Klasör Yapılarını Ayarla
-        mkdir -p app/src/main/res
-        mkdir -p app/src/main/java
-        
-        # 2. Ana build.gradle (Proje Seviyesi) Oluştur
-        cat << 'EOF' > build.gradle
-        buildscript {
-            repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-        }
-        allprojects { repositories { google(); mavenCentral() } }
-        EOF
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-        # 3. settings.gradle Oluştur
-        echo "include ':app'" > settings.gradle
+      - name: Build with Gradle
+        run: ./gradlew build
+EOF
+  echo "âœ… .github/workflows/android-build.yml oluÅŸturuldu."
+fi
 
-        # 4. app/build.gradle (Uygulama Seviyesi) Oluştur
-        cat << 'EOF' > app/build.gradle
-        apply plugin: 'com.android.application'
-        android {
-            namespace 'com.open.source.app'
-            compileSdk 34
-            defaultConfig {
-                applicationId "com.open.source.app"
-                minSdk 21
-                targetSdk 34
-                versionCode 1
-                versionName "1.0.0"
-            }
-            buildTypes {
-                release {
-                    minifyEnabled false
-                }
-            }
-        }
-        EOF
+if [ ! -f ".github/ISSUE_TEMPLATE/bug_report.md" ]; then
+  cat > .github/ISSUE_TEMPLATE/bug_report.md <<'EOF'
+---
+name: Hata Bildirimi
+about: Bir hata bildirin
+title: "[BUG] "
+labels: bug
+---
 
-        # 5. Sizin Ham Kodlarınızı Yeni Projeye Taşı
-        echo "=== DOSYALAR YENİ PROJEYE TAŞINIYOR ==="
-        if [ -d "kaynak" ]; then
-          cp -r kaynak/res/* app/src/main/res/ 2>/dev/null || true
-          cp -r kaynak/java/* app/src/main/java/ 2>/dev/null || true
-          cp -r kaynak/src/* app/src/main/src/ 2>/dev/null || true
-          cp kaynak/AndroidManifest.xml app/src/main/ 2>/dev/null || true
-        else
-          cp -r res/* app/src/main/res/ 2>/dev/null || true
-          cp -r java/* app/src/main/java/ 2>/dev/null || true
-          cp -r src/* app/src/main/src/ 2>/dev/null || true
-          cp AndroidManifest.xml app/src/main/ 2>/dev/null || true
-        fi
+**HatanÄ±n aÃ§Ä±klamasÄ±**
+Neyin yanlÄ±ÅŸ gittiÄŸini aÃ§Ä±k bir ÅŸekilde anlatÄ±n.
 
-        # 6. ONARICI AJAN: Hatalı Dosya İsimlerini ve Bozuk XML'leri Otomatik Düzelt
-        echo "=== AKTİF DOSYA ONARIMI BAŞLATILDI ==="
-        
-        # İçinde $ işareti olan tüm tasarımları/resimleri otomatik temizle
-        find app/src/main/res/ -name "*$*" -delete || true
-        
-        # Derleyicinin çökmesine neden olan bozuk ve geçersiz UTF-8 XML dosyalarını otomatik temizle
-        rm -f app/src/main/res/color-v23/abc_tint_seek_thumb.xml || true
-        rm -f app/src/main/res/color/mtrl_btn_text_color_selector.xml || true
-        rm -f app/src/main/res/animator/mtrl_chip_state_list_anim.xml || true
-        rm -f app/src/main/res/color/mtrl_btn_text_btn_ripple_color.xml || true
+**NasÄ±l tekrar edilir**
+1. ...
+2. ...
 
-        # 7. Eksik Manifest Varsa Otomatik Doldur
-        if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://android.com">
-              <application android:allowBackup="true" android:label="Acik Kaynak Uygulama" android:theme="@android:style/Theme.Material.Light">
-              </application>
-          </manifest>
-        EOF
-        fi
+**Beklenen davranÄ±ÅŸ**
+Ne olmasÄ±nÄ± bekliyordunuz.
 
-    # 8. Temizlenen Projeyi Derle
-    - name: APK Derle (Onarılmış Kod Tabani)
-      run: gradle app:assembleDebug
+**Ekran gÃ¶rÃ¼ntÃ¼leri**
+Varsa ekleyin.
 
-    - name: Derlenen Yepyeni APK'yı İndirilebilir Yap
-      uses: actions/upload-artifact@v4
-      with:
-        name: Yepyeni-Derlenmis-APK
-        path: app/build/outputs/apk/debug/*.apk
-        
+**Cihaz bilgisi**
+- Android sÃ¼rÃ¼mÃ¼:
+- Cihaz modeli:
+- Uygulama sÃ¼rÃ¼mÃ¼:
+EOF
+  echo "âœ… Bug report ÅŸablonu oluÅŸturuldu."
+fi
+
+if [ ! -f ".github/ISSUE_TEMPLATE/feature_request.md" ]; then
+  cat > .github/ISSUE_TEMPLATE/feature_request.md <<'EOF'
+---
+name: Ã–zellik Ä°steÄŸi
+about: Yeni bir Ã¶zellik Ã¶nerin
+title: "[FEATURE] "
+labels: enhancement
+---
+
+**Bu Ã¶zellik hangi problemi Ã§Ã¶zÃ¼yor?**
+
+**Ã–nerdiÄŸiniz Ã§Ã¶zÃ¼m**
+
+**Alternatifler**
+EOF
+  echo "âœ… Feature request ÅŸablonu oluÅŸturuldu."
+fi
+
+if [ ! -f ".github/PULL_REQUEST_TEMPLATE.md" ]; then
+  cat > .github/PULL_REQUEST_TEMPLATE.md <<'EOF'
+## AÃ§Ä±klama
+Bu PR ne yapÄ±yor?
+
+## Ä°lgili Issue
+Closes #
+
+## Kontrol Listesi
+- [ ] Kod build oluyor (`./gradlew build`)
+- [ ] Testler geÃ§iyor
+- [ ] Gerekli dokÃ¼mantasyon gÃ¼ncellendi
+EOF
+  echo "âœ… Pull request ÅŸablonu oluÅŸturuldu."
+fi
+
+# ---------------------------------------------------------------
+# 6) gradlew Ã§alÄ±ÅŸtÄ±rÄ±labilir yap
+# ---------------------------------------------------------------
+if [ -f "gradlew" ]; then
+  chmod +x gradlew
+  echo "âœ… gradlew Ã§alÄ±ÅŸtÄ±rÄ±labilir yapÄ±ldÄ±."
+else
+  echo "âš ï¸  gradlew bulunamadÄ± â€” Gradle wrapper dosyalarÄ±nÄ±n repoda olduÄŸundan emin olun."
+fi
+
+# ---------------------------------------------------------------
+# 7) Hassas dosya / secret taramasÄ±
+# ---------------------------------------------------------------
+echo ""
+echo "ğŸ” Hassas dosyalar taranÄ±yor..."
+FOUND_SENSITIVE=0
+
+SENSITIVE_PATTERNS=(
+  "*.keystore"
+  "*.jks"
+  "google-services.json"
+  "local.properties"
+  "secrets.properties"
+  "*.env"
+)
+
+for pattern in "${SENSITIVE_PATTERNS[@]}"; do
+  while IFS= read -r -d '' file; do
+    echo "  âš ï¸  Bulundu: $file"
+    FOUND_SENSITIVE=1
+  done < <(find . -type f -name "$pattern" -not -path "./.git/*" -print0 2>/dev/null)
+done
+
+# Kod iÃ§inde olasÄ± API key / token taramasÄ± (basit regex)
+if grep -rIlE "(api[_-]?key|apikey|secret|token)\s*=\s*\"[A-Za-z0-9_\-]{10,}\"" \
+   --include="*.kt" --include="*.java" --include="*.xml" --include="*.gradle*" . 2>/dev/null \
+   | grep -v ".git/" > /tmp/possible_secrets.txt; then
+  if [ -s /tmp/possible_secrets.txt ]; then
+    echo "  âš ï¸  Kod iÃ§inde olasÄ± gÃ¶mÃ¼lÃ¼ key/secret bulundu:"
+    cat /tmp/possible_secrets.txt | sed 's/^/      /'
+    FOUND_SENSITIVE=1
+  fi
+fi
+
+if [ "$FOUND_SENSITIVE" -eq 1 ]; then
+  echo ""
+  echo "â— YukarÄ±daki dosya/kod parÃ§alarÄ± GitHub'a push etmeden Ã¶nce temizlenmeli."
+  echo "   EÄŸer bu dosyalar daha Ã¶nce commit edildiyse, git geÃ§miÅŸinden de"
+  echo "   silmek iÃ§in 'git filter-repo' veya 'BFG Repo-Cleaner' kullanÄ±n."
+else
+  echo "  âœ… Belirgin bir hassas dosya/secret bulunamadÄ±."
+fi
+
+echo ""
+echo "ğŸ‰ AÃ§Ä±k kaynak hazÄ±rlÄ±ÄŸÄ± tamamlandÄ±."
+echo "SÄ±radaki adÄ±mlar:"
+echo "  1. README.md iÃ§eriÄŸini gÃ¶zden geÃ§irip Ã¶zelleÅŸtirin."
+echo "  2. LICENSE dosyasÄ±ndaki isim alanÄ±nÄ± kontrol edin."
+echo "  3. git add . && git commit -m 'Open source hazÄ±rlÄ±ÄŸÄ±' && git push"
