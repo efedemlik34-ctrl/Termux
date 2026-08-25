@@ -1,4 +1,4 @@
-name: Build Free APK
+name: Build APK
 
 on:
   workflow_dispatch:
@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Kaynak kodunu al
+      - name: Repository'yi indir
         uses: actions/checkout@v4
 
-      - name: Java 17 kur
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -23,14 +23,66 @@ jobs:
       - name: Gradle kurulumu
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Gradle izinleri
-        run: chmod +x gradlew
+      - name: Gradle Wrapper'ı otomatik oluştur
+        shell: bash
+        run: |
+          set -e
+
+          if [ -f "./gradlew" ]; then
+            echo "gradlew bulundu."
+            chmod +x ./gradlew
+          else
+            echo "gradlew bulunamadı."
+
+            if [ -f "./build.gradle" ] || [ -f "./build.gradle.kts" ]; then
+              echo "Proje kökünde Gradle dosyası bulundu."
+              gradle wrapper
+              chmod +x ./gradlew
+
+            else
+              echo "Alt klasörlerde Gradle projesi aranıyor..."
+
+              PROJECT_DIR=$(find . -maxdepth 3 \
+                \( -name "build.gradle" -o -name "build.gradle.kts" \) \
+                -not -path "./.gradle/*" \
+                -printf '%h\n' | head -n 1)
+
+              if [ -z "$PROJECT_DIR" ]; then
+                echo "Android/Gradle projesi bulunamadı."
+                exit 1
+              fi
+
+              echo "Proje bulundu: $PROJECT_DIR"
+              cd "$PROJECT_DIR"
+
+              if [ ! -f "./gradlew" ]; then
+                gradle wrapper
+              fi
+
+              chmod +x ./gradlew
+            fi
+          fi
 
       - name: APK oluştur
-        run: ./gradlew assembleDebug
+        shell: bash
+        run: |
+          set -e
 
-      - name: APK'yı yükle
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug
+          else
+            PROJECT_DIR=$(find . -maxdepth 3 \
+              \( -name "build.gradle" -o -name "build.gradle.kts" \) \
+              -not -path "./.gradle/*" \
+              -printf '%h\n' | head -n 1)
+
+            cd "$PROJECT_DIR"
+            ./gradlew assembleDebug
+          fi
+
+      - name: APK'yı kaydet
         uses: actions/upload-artifact@v4
         with:
-          name: free-apk
-          path: '**/build/outputs/apk/debug/*.apk'
+          name: app-debug-apk
+          path: '**/build/outputs/apk/**/*.apk'
+          if-no-files-found: error
