@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # 1. ADIM: GÜVENLİK VE LİSANS KONTROLÜ (Açık kaynak projeler için zorunludur)
+  # 1. ADIM: GÜVENLİK VE LİSANS KONTROLÜ (Tüm Geçmişi ve Klasörü Tarar)
   guvenlik_tarama:
     name: Hassas Veri ve Güvenlik Taraması
     runs-on: ubuntu-latest
@@ -21,10 +21,9 @@ jobs:
     - name: Gizli Şifre ve API Anahtarı Taraması (TruffleHog)
       uses: trufflesecurity/trufflehog@main
       with:
-        path: ./
-        base: ${{ github.event.repository.default_branch }}
-        head: HEAD
-        extra_args: --debug --only-verified
+        base: "" # İlk commit'ten itibaren tüm geçmişin taranmasını sağlar
+        head: ${{ github.ref_name }}
+        extra_args: --results=verified,unknown
 
   # 2. ADIM: OTOMATİK APK DERLEME VE TEST
   derleme_ve_test:
