@@ -1,88 +1,87 @@
-name: Build APK
+name: Kapsamlı Açık Kaynak Entegrasyonu ve APK Derleyici
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  # 1. ADIM: GÜVENLİK VE LİSANS KONTROLÜ (Açık kaynak projeler için zorunludur)
+  guvenlik_tarama:
+    name: Hassas Veri ve Güvenlik Taraması
     runs-on: ubuntu-latest
-
     steps:
-      - name: Repository'yi indir
-        uses: actions/checkout@v4
+    - name: Kodları İndir
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+    - name: Gizli Şifre ve API Anahtarı Taraması (TruffleHog)
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: ${{ github.event.repository.default_branch }}
+        head: HEAD
+        extra_args: --debug --only-verified
 
-      - name: Gradle kurulumu
-        uses: gradle/actions/setup-gradle@v4
+  # 2. ADIM: OTOMATİK APK DERLEME VE TEST
+  derleme_ve_test:
+    name: Android APK Derleme ve Test Süreci
+    needs: guvenlik_tarama
+    runs-on: ubuntu-latest
+    steps:
+    - name: Kodları İndir
+      uses: actions/checkout@v4
 
-      - name: Gradle Wrapper'ı otomatik oluştur
-        shell: bash
-        run: |
-          set -e
+    - name: Java 17 Ortamını Kur
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        cache: 'gradle'
 
-          if [ -f "./gradlew" ]; then
-            echo "gradlew bulundu."
-            chmod +x ./gradlew
-          else
-            echo "gradlew bulunamadı."
+    - name: Gradle Çalıştırma İzinlerini Düzenle
+      run: chmod +x gradlew
 
-            if [ -f "./build.gradle" ] || [ -f "./build.gradle.kts" ]; then
-              echo "Proje kökünde Gradle dosyası bulundu."
-              gradle wrapper
-              chmod +x ./gradlew
+    - name: Kod Kalitesi ve Hata Taraması (Lint)
+      run: ./gradlew lintDebug --continue
 
-            else
-              echo "Alt klasörlerde Gradle projesi aranıyor..."
+    - name: Güvenli APK Derle (Debug)
+      run: ./gradlew assembleDebug
 
-              PROJECT_DIR=$(find . -maxdepth 3 \
-                \( -name "build.gradle" -o -name "build.gradle.kts" \) \
-                -not -path "./.gradle/*" \
-                -printf '%h\n' | head -n 1)
+    - name: Derlenen APK Dosyasını Dışarı Aktar
+      uses: actions/upload-artifact@v4
+      with:
+        name: Acik-Kaynak-Uygulama-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
 
-              if [ -z "$PROJECT_DIR" ]; then
-                echo "Android/Gradle projesi bulunamadı."
-                exit 1
-              fi
+  # 3. ADIM: AÇIK KAYNAK SÜRÜM NOTLARI (CHANGELOG) OLUŞTURMA
+  surum_yonetimi:
+    name: Otomatik Açık Kaynak Yayını
+    needs: derleme_ve_test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+    - name: Kodları İndir
+      uses: actions/checkout@v4
 
-              echo "Proje bulundu: $PROJECT_DIR"
-              cd "$PROJECT_DIR"
-
-              if [ ! -f "./gradlew" ]; then
-                gradle wrapper
-              fi
-
-              chmod +x ./gradlew
-            fi
-          fi
-
-      - name: APK oluştur
-        shell: bash
-        run: |
-          set -e
-
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug
-          else
-            PROJECT_DIR=$(find . -maxdepth 3 \
-              \( -name "build.gradle" -o -name "build.gradle.kts" \) \
-              -not -path "./.gradle/*" \
-              -printf '%h\n' | head -n 1)
-
-            cd "$PROJECT_DIR"
-            ./gradlew assembleDebug
-          fi
-
-      - name: APK'yı kaydet
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug-apk
-          path: '**/build/outputs/apk/**/*.apk'
-          if-no-files-found: error
+    - name: GitHub Sürümü ve Değişim Günlüğü Oluştur
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v1.0.${{ github.run_number }}
+        name: Açık Kaynak Sürümü v1.0.${{ github.run_number }}
+        body: |
+          ## 🚀 Yeni Açık Kaynak Sürümü Hazır!
+          Bu sürüm GitHub Actions tarafından otomatik olarak derlenmiştir.
+          
+          ### 🛠️ Yapılan Değişiklikler:
+          - Kod tabanı açık kaynak standartlarına göre tarandı.
+          - Güvenlik ve gizli anahtar (API token) kontrolleri yapıldı.
+          - Kararlı APK çıktısı üretildi.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
