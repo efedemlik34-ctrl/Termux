@@ -1,4 +1,4 @@
-name: Android Build
+name: DİYAZ Android Build
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java 17
@@ -24,16 +24,45 @@ jobs:
       - name: Install Android SDK
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
+      - name: Prepare existing project resources
+        shell: bash
+        run: |
+          set -e
+          mkdir -p app/src/main/java app/src/main/kotlin app/src/main/res app/src/main/assets
+
+          # Keep existing repository resources available to the Android app.
+          # Compiled DEX files are intentionally ignored and never copied.
+          for d in beauty_agora lottie; do
+            if [ -d "$d" ]; then
+              cp -R "$d" app/src/main/assets/"$d"
+            fi
+          done
+
+          # Make any existing Java/Kotlin source trees available without
+          # treating binary/compiled files as source code.
+          for d in java kotlin; do
+            if [ -d "$d" ]; then
+              find "$d" -type f \( -name '*.java' -o -name '*.kt' -o -name '*.kts' \) -print0 |
+              while IFS= read -r -d '' f; do
+                rel="${f#*/}"
+                dest="app/src/main/$d/$rel"
+                mkdir -p "$(dirname "$dest")"
+                cp "$f" "$dest"
+              done
+            fi
+          done
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace
+      - name: Build DİYAZ Debug APK
+        run: gradle clean assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Upload DİYAZ APK
         uses: actions/upload-artifact@v4
         with:
           name: DIYAZ-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
