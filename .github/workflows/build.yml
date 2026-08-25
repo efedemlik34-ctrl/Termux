@@ -23,7 +23,7 @@ jobs:
       run: |
         echo "=== SIFIRDAN ANDROID PROJESİ OLUŞTURULUYOR ==="
         
-        # 1. Gradle ve Proje Yapısını Ayarla
+        # 1. Klasör Yapılarını Ayarla
         mkdir -p gradle/wrapper
         mkdir -p app/src/main/res
         mkdir -p app/src/main/java
@@ -61,16 +61,17 @@ jobs:
         }
         EOF
 
-        # 5. Gradle Wrapper Dosyalarını İndir (İnşa Motoru)
-        wget -q https://gradle.org
-        unzip -q gradle-8.5-bin.zip
-        mv gradle-8.5/* .
-        rm -rf gradle-8.5 gradle-8.5-bin.zip
-        
-        # 6. Sizin Ham Kodlarınızı Yeni Projenin İçine Yerleştirme
+        # 5. Gradle Otomatik Dağıtım Ayarlarını Tanımla (Wget Hatasını Önler)
+        cat << 'EOF' > gradle/wrapper/gradle-wrapper.properties
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
+
+        # 6. Sizin Ham Kodlarınızı Yeni Projeniye Güvenle Taşı
         echo "=== DOSYALAR YENİ PROJEYE TAŞINIYOR ==="
-        
-        # Eğer kaynak dosyaları bir alt klasördeyse veya ana dizindeyse tespit edip taşıyalım
         if [ -d "kaynak" ]; then
           cp -r kaynak/res/* app/src/main/res/ 2>/dev/null || true
           cp -r kaynak/java/* app/src/main/java/ 2>/dev/null || true
@@ -83,7 +84,7 @@ jobs:
           cp AndroidManifest.xml app/src/main/ 2>/dev/null || true
         fi
 
-        # Eğer manifest dosyası eksikse temel bir tane oluşturalım ki derleme çökmeyin
+        # 7. Eksik Manifest Varsa Otomatik Doldur (Derleme Hatasını Engeller)
         if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://android.com">
@@ -93,10 +94,11 @@ jobs:
         EOF
         fi
 
-    - name: Projeyi APK Olarak Derle
-      run: |
-        chmod +x bin/gradle || chmod +x gradlew || true
-        ./bin/gradle app:assembleDebug
+    # 8. Resmi GitHub Gradle Yapılandırıcısını Kullanarak Derle
+    - name: Gradle Kurulumu Yap ve APK Derle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        arguments: app:assembleDebug
 
     - name: Derlenen Yepyeni APK'yı Telefona İndirilebilir Yap
       uses: actions/upload-artifact@v4
