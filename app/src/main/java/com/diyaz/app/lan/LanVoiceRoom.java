@@ -2,28 +2,18 @@ package com.diyaz.app.lan;
 
 import java.io.IOException;
 
-/** Simple host/client facade for a private DİYAZ LAN voice room. */
+/** Host/client facade for a private DİYAZ LAN voice room. */
 public class LanVoiceRoom {
-    private final LanRoomServer server = new LanRoomServer();
-    private LanAudioPeer peer;
-    private int port;
+    private final LanAudioPeer audio = new LanAudioPeer();
 
     public int host() throws IOException {
-        port = server.start(socket -> {
-            try { socket.close(); } catch (IOException ignored) {}
-        });
-        return port;
+        audio.startHost();
+        return LanAudioPeer.PORT;
     }
 
     public void connect(String hostAddress) throws IOException {
-        peer = new LanAudioPeer();
-        peer.start(hostAddress);
+        audio.startClient(hostAddress);
     }
 
-    public void stop() {
-        if (peer != null) peer.stop();
-        server.stop();
-    }
-
-    public int getPort() { return port; }
+    public void stop() { audio.stop(); }
 }
