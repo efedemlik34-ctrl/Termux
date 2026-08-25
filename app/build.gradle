@@ -3,23 +3,22 @@ plugins {
 }
 
 android {
-    namespace 'com.example.termux'
+    namespace 'com.diyaz.app'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.example.termux'
+        applicationId 'com.diyaz.app'
         minSdk 23
         targetSdk 35
         versionCode 1
-        versionName '1.0'
+        versionName '1.0.0'
     }
 
     buildTypes {
-        debug {
-            debuggable true
-        }
+        debug { debuggable true }
         release {
             minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
