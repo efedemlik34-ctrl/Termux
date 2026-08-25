@@ -24,7 +24,6 @@ jobs:
         echo "=== SIFIRDAN ANDROID PROJESİ OLUŞTURULUYOR ==="
         
         # 1. Klasör Yapılarını Ayarla
-        mkdir -p gradle/wrapper
         mkdir -p app/src/main/res
         mkdir -p app/src/main/java
         
@@ -61,16 +60,7 @@ jobs:
         }
         EOF
 
-        # 5. Gradle Dağıtım Ayarlarını Tanımla
-        cat << 'EOF' > gradle/wrapper/gradle-wrapper.properties
-        distributionBase=GRADLE_USER_HOME
-        distributionPath=wrapper/dists
-        distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-        zipStoreBase=GRADLE_USER_HOME
-        zipStorePath=wrapper/dists
-        EOF
-
-        # 6. Sizin Ham Kodlarınızı Yeni Projeye Taşı
+        # 5. Sizin Ham Kodlarınızı Yeni Projeye Taşı
         echo "=== DOSYALAR YENİ PROJEYE TAŞINIYOR ==="
         if [ -d "kaynak" ]; then
           cp -r kaynak/res/* app/src/main/res/ 2>/dev/null || true
@@ -84,7 +74,7 @@ jobs:
           cp AndroidManifest.xml app/src/main/ 2>/dev/null || true
         fi
 
-        # 7. Eksik Manifest Varsa Otomatik Doldur
+        # 6. Eksik Manifest Varsa Otomatik Doldur
         if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://android.com">
@@ -94,13 +84,9 @@ jobs:
         EOF
         fi
 
-    # 8. Resmi Gradle Ortamını Hazırla
-    - name: Gradle Kurulumu Yap
-      uses: gradle/actions/setup-gradle@v4
-
-    # 9. Derleme Komutunu Standart 'run' Satırı Olarak Çalıştır
-    - name: APK Derle (Debug)
-      run: chmod +x gradlew && ./gradlew app:assembleDebug
+    # 7. Sistemdeki Yerel Gradle Motorunu Kullanarak Doğrudan Derle (Hata İhtimalini Kapatır)
+    - name: APK Derle (Sistem Gradle'ı)
+      run: gradle app:assembleDebug
 
     - name: Derlenen Yepyeni APK'yı İndirilebilir Yap
       uses: actions/upload-artifact@v4
