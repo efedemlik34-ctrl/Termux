@@ -1,17 +1,3 @@
-#!/usr/bin/env bash
-#
-# opensource_prep.sh
-#
-# Bu script, bir Kotlin/Android projesini GitHub'da aÃ§Ä±k kaynak kodlu
-# paylaÅŸmaya hazÄ±r hale getirir:
-#   - Eksik LICENSE, .gitignore, README.md, CONTRIBUTING.md dosyalarÄ±nÄ± oluÅŸturur
-#   - .github/ altÄ±nda CI workflow, issue/PR ÅŸablonlarÄ± ekler
-#   - Hassas dosyalarÄ± (keystore, API key, google-services.json vb.) tarar ve uyarÄ±r
-#
-# KullanÄ±m:
-#   chmod +x opensource_prep.sh
-#   ./opensource_prep.sh /repo/kok/dizini "AdÄ±n SoyadÄ±n"
-#
 set -euo pipefail
 
 PROJECT_DIR="${1:-.}"
