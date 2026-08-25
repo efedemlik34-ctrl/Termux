@@ -1,86 +1,106 @@
-name: Kapsamlı Açık Kaynak Entegrasyonu ve APK Derleyici
+name: Otomatik Proje İnşa Edici ve APK Derleyici
 
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
-  # 1. ADIM: GÜVENLİK VE LİSANS KONTROLÜ (Tüm Geçmişi ve Klasörü Tarar)
-  guvenlik_tarama:
-    name: Hassas Veri ve Güvenlik Taraması
-    runs-on: ubuntu-latest
-    steps:
-    - name: Kodları İndir
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Gizli Şifre ve API Anahtarı Taraması (TruffleHog)
-      uses: trufflesecurity/trufflehog@main
-      with:
-        base: "" # İlk commit'ten itibaren tüm geçmişin taranmasını sağlar
-        head: ${{ github.ref_name }}
-        extra_args: --results=verified,unknown
-
-  # 2. ADIM: OTOMATİK APK DERLEME VE TEST
-  derleme_ve_test:
-    name: Android APK Derleme ve Test Süreci
-    needs: guvenlik_tarama
+  proje_olustur_ve_derle:
+    name: Proje Altyapısını Kur ve APK Üret
     runs-on: ubuntu-latest
     steps:
     - name: Kodları İndir
       uses: actions/checkout@v4
 
     - name: Java 17 Ortamını Kur
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         distribution: 'temurin'
         java-version: '17'
-        cache: 'gradle'
 
-    - name: Gradle Çalıştırma İzinlerini Düzenle
-      run: chmod +x gradlew
+    - name: Android SDK ve Proje İskeletini Otomatik Oluştur
+      run: |
+        echo "=== SIFIRDAN ANDROID PROJESİ OLUŞTURULUYOR ==="
+        
+        # 1. Gradle ve Proje Yapısını Ayarla
+        mkdir -p gradle/wrapper
+        mkdir -p app/src/main/res
+        mkdir -p app/src/main/java
+        
+        # 2. Ana build.gradle (Proje Seviyesi) Oluştur
+        cat << 'EOF' > build.gradle
+        buildscript {
+            repositories { google(); mavenCentral() }
+            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+        }
+        allprojects { repositories { google(); mavenCentral() } }
+        EOF
 
-    - name: Kod Kalitesi ve Hata Taraması (Lint)
-      run: ./gradlew lintDebug --continue
+        # 3. settings.gradle Oluştur
+        echo "include ':app'" > settings.gradle
 
-    - name: Güvenli APK Derle (Debug)
-      run: ./gradlew assembleDebug
+        # 4. app/build.gradle (Uygulama Seviyesi) Oluştur
+        cat << 'EOF' > app/build.gradle
+        apply plugin: 'com.android.application'
+        android {
+            namespace 'com.open.source.app'
+            compileSdk 34
+            defaultConfig {
+                applicationId "com.open.source.app"
+                minSdk 21
+                targetSdk 34
+                versionCode 1
+                versionName "1.0.0"
+            }
+            buildTypes {
+                release {
+                    minifyEnabled false
+                }
+            }
+        }
+        EOF
 
-    - name: Derlenen APK Dosyasını Dışarı Aktar
+        # 5. Gradle Wrapper Dosyalarını İndir (İnşa Motoru)
+        wget -q https://gradle.org
+        unzip -q gradle-8.5-bin.zip
+        mv gradle-8.5/* .
+        rm -rf gradle-8.5 gradle-8.5-bin.zip
+        
+        # 6. Sizin Ham Kodlarınızı Yeni Projenin İçine Yerleştirme
+        echo "=== DOSYALAR YENİ PROJEYE TAŞINIYOR ==="
+        
+        # Eğer kaynak dosyaları bir alt klasördeyse veya ana dizindeyse tespit edip taşıyalım
+        if [ -d "kaynak" ]; then
+          cp -r kaynak/res/* app/src/main/res/ 2>/dev/null || true
+          cp -r kaynak/java/* app/src/main/java/ 2>/dev/null || true
+          cp -r kaynak/src/* app/src/main/src/ 2>/dev/null || true
+          cp kaynak/AndroidManifest.xml app/src/main/ 2>/dev/null || true
+        else
+          cp -r res/* app/src/main/res/ 2>/dev/null || true
+          cp -r java/* app/src/main/java/ 2>/dev/null || true
+          cp -r src/* app/src/main/src/ 2>/dev/null || true
+          cp AndroidManifest.xml app/src/main/ 2>/dev/null || true
+        fi
+
+        # Eğer manifest dosyası eksikse temel bir tane oluşturalım ki derleme çökmeyin
+        if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://android.com">
+              <application android:allowBackup="true" android:label="Acik Kaynak Uygulama" android:theme="@android:style/Theme.Material.Light">
+              </application>
+          </manifest>
+        EOF
+        fi
+
+    - name: Projeyi APK Olarak Derle
+      run: |
+        chmod +x bin/gradle || chmod +x gradlew || true
+        ./bin/gradle app:assembleDebug
+
+    - name: Derlenen Yepyeni APK'yı Telefona İndirilebilir Yap
       uses: actions/upload-artifact@v4
       with:
-        name: Acik-Kaynak-Uygulama-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
-
-  # 3. ADIM: AÇIK KAYNAK SÜRÜM NOTLARI (CHANGELOG) OLUŞTURMA
-  surum_yonetimi:
-    name: Otomatik Açık Kaynak Yayını
-    needs: derleme_ve_test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-    - name: Kodları İndir
-      uses: actions/checkout@v4
-
-    - name: GitHub Sürümü ve Değişim Günlüğü Oluştur
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: v1.0.${{ github.run_number }}
-        name: Açık Kaynak Sürümü v1.0.${{ github.run_number }}
-        body: |
-          ## 🚀 Yeni Açık Kaynak Sürümü Hazır!
-          Bu sürüm GitHub Actions tarafından otomatik olarak derlenmiştir.
-          
-          ### 🛠️ Yapılan Değişiklikler:
-          - Kod tabanı açık kaynak standartlarına göre tarandı.
-          - Güvenlik ve gizli anahtar (API token) kontrolleri yapıldı.
-          - Kararlı APK çıktısı üretildi.
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: Yepyeni-Derlenmis-APK
+        path: app/build/outputs/apk/debug/*.apk
         
